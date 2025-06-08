@@ -13,6 +13,11 @@ output "lambda_role_arn" {
   value       = aws_iam_role.boto3_lambda_role.arn
 }
 
+output "lambda_function_arn" {
+  description = "ARN of the Lambda Function"
+  value       = aws_lambda_function.csv_parser.arn
+}
+
 output "cloudwatch_log_group_name" {
   description = "Name of the CloudWatch log group"
   value       = aws_cloudwatch_log_group.lambda_logs.name
