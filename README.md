@@ -37,7 +37,7 @@ This solution addresses critical data quality challenges faced by finance and op
 ## Project Folder Structure
 
 ```
-automated-csv-validation-lambda-s3-1/
+automated-csv-validation-lambda-s3/
 ├── BillingBucketParser/
 │   ├── event.json                         # Mock S3 event for local testing
 │   └── lambda_function.py                 # Core validation logic
