@@ -39,19 +39,19 @@ This solution addresses critical data quality challenges faced by finance and op
 ```
 automated-csv-validation-lambda-s3-1/
 ├── BillingBucketParser/
-│   ├── event.json                    # Mock S3 event for local testing
-│   └── lambda_function.py            # Core validation logic
-├── s3_files/                         # Sample CSV test data
+│   ├── event.json                        # Mock S3 event for local testing
+│   └── lambda_function.py                # Core validation logic
+├── s3_files/                             # Sample CSV test data
 │   ├── billing_data_bakery_june_2025.csv
 │   ├── billing_data_dairy_june_2025.csv
 │   └── billing_data_meat_june_2025.csv
-├── terraform/                        # Infrastructure as Code
-│   ├── iam.tf                       # IAM roles and policies
-│   ├── lambda.tf                    # Lambda function configuration
-│   ├── main.tf                      # Provider and version constraints
-│   ├── outputs.tf                   # Resource outputs
-│   ├── s3.tf                        # S3 bucket definitions
-│   └── variables.tf                 # Configurable parameters
+├── terraform/                            # Infrastructure as Code
+│   ├── iam.tf                            # IAM roles and policies
+│   ├── lambda.tf                         # Lambda function configuration
+│   ├── main.tf                           # Provider and version constraints
+│   ├── outputs.tf                        # Resource outputs
+│   ├── s3.tf                             # S3 bucket definitions
+│   └── variables.tf                      # Configurable parameters
 └── README.md
 ```
 
