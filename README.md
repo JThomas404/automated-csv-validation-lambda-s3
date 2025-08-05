@@ -6,13 +6,11 @@
 - [Real-World Business Value](#real-world-business-value)
 - [Prerequisites](#prerequisites)
 - [Project Folder Structure](#project-folder-structure)
-- [How It Works](#how-it-works)
-- [Tasks and Implementation Steps](#tasks-and-implementation-steps)
-- [Local Testing](#local-testing)
-- [Lambda Deployment with Environment Variables](#lambda-deployment-with-environment-variables)
-- [IAM Role for Lambda S3 Access](#iam-role-for-lambda-s3-access)
+- [Core Implementation Breakdown](#core-implementation-breakdown)
+- [Local Testing and Debugging](#local-testing-and-debugging)
+- [IAM Role and Permissions](#iam-role-and-permissions)
 - [Design Decisions and Highlights](#design-decisions-and-highlights)
-- [Errors Encountered](#errors-encountered)
+- [Errors Encountered and Resolved](#errors-encountered-and-resolved)
 - [Skills Demonstrated](#skills-demonstrated)
 - [Conclusion](#conclusion)
 
@@ -20,102 +18,84 @@
 
 ## Overview
 
-This project implements a serverless data validation pipeline using AWS Lambda and S3, designed to automatically verify the integrity of incoming billing CSV files. When a file is uploaded to an S3 "upload" bucket, the Lambda function is triggered. It validates the content according to predefined business rules (e.g. valid date format, currency type, and product line). If any validation fails, the file is copied to a dedicated error bucket and deleted from the upload location. This approach ensures clean data intake and isolates problematic files for further inspection.
+This project implements a serverless data validation pipeline using AWS Lambda and S3, designed to automatically verify the integrity of incoming billing CSV files. The system triggers upon file upload to an S3 bucket, validates content against predefined business rules (date format, currency type, and product line), and routes invalid files to a dedicated error bucket whilst removing them from the primary location. This architecture ensures data quality enforcement and automated error isolation for downstream analytics processes.
 
 ## Real-World Business Value
 
-This solution addresses a real need for finance and data teams that routinely process large volumes of CSV-based billing data. Automating validation reduces human error, ensures only clean data enters the analytics pipeline, and accelerates monthly reporting. By offloading the validation logic to AWS Lambda and S3, the system remains scalable, cost-efficient, and maintenance-free—making it ideal for modern, cloud-native organisations.
-
----
+This solution addresses critical data quality challenges faced by finance and operations teams processing high-volume CSV-based billing data. The automated validation pipeline eliminates manual verification overhead, prevents corrupted data from entering analytics workflows, and provides immediate error isolation for remediation. By leveraging serverless architecture, the system delivers cost-effective scalability whilst maintaining zero operational overhead—essential for modern cloud-native organisations requiring reliable data ingestion processes.
 
 ## Prerequisites
 
-1. A boilerplate Python-based Lambda function named `BillingBucketParser` in a development environment (e.g., VS Code).
-2. Two Amazon S3 buckets:
-   - `dct-billing-x` for incoming billing CSV files
-   - `dct-billing-errors-x` for files that fail validation
-3. A collection of sample CSV test files for validation testing.
-
----
+- AWS CLI configured with appropriate permissions
+- Terraform >= 1.0.0 installed locally
+- Python 3.11 runtime environment
+- Two S3 buckets (created via Terraform):
+  - Upload bucket for incoming CSV files
+  - Error bucket for validation failures
+- Sample CSV test files with billing data structure
 
 ## Project Folder Structure
 
 ```
-
-automated-csv-validation-lambda-s3/
+automated-csv-validation-lambda-s3-1/
 ├── BillingBucketParser/
-│   ├── event.json
-│   └── lambda\_function.py
-├── BillingBucketParser.zip
-├── README.md
-├── s3\_files/
-│   ├── billing\_data\_bakery\_june\_2025.csv
-│   ├── billing\_data\_dairy\_june\_2025.csv
-│   └── billing\_data\_meat\_june\_2025.csv
-├── terraform/
-│   ├── iam.tf
-│   ├── lambda.tf
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── s3.tf
-│   ├── terraform.tfstate
-│   ├── terraform.tfstate.backup
-│   └── variables.tf
-└── venv/
-
+│   ├── event.json                    # Mock S3 event for local testing
+│   └── lambda_function.py            # Core validation logic
+├── s3_files/                         # Sample CSV test data
+│   ├── billing_data_bakery_june_2025.csv
+│   ├── billing_data_dairy_june_2025.csv
+│   └── billing_data_meat_june_2025.csv
+├── terraform/                        # Infrastructure as Code
+│   ├── iam.tf                       # IAM roles and policies
+│   ├── lambda.tf                    # Lambda function configuration
+│   ├── main.tf                      # Provider and version constraints
+│   ├── outputs.tf                   # Resource outputs
+│   ├── s3.tf                        # S3 bucket definitions
+│   └── variables.tf                 # Configurable parameters
+└── README.md
 ```
 
----
+## Core Implementation Breakdown
 
-## How It Works
+### Lambda Function Architecture
 
-1. **Trigger**: Uploading a `.csv` file to the primary S3 bucket triggers the Lambda function.
-2. **Validation**: The Lambda parses each row and validates:
-   - Product line is in a valid set (`Bakery`, `Meat`, `Dairy`)
-   - Currency is allowed (`USD`, `MXN`, `CAD`)
-   - Dates conform to the format `YYYY-MM-DD`
-3. **Routing**:
-   - If valid → the file remains
-   - If invalid → the file is copied to the error bucket and deleted from the upload bucket
-
----
-
-## Tasks and Implementation Steps
-
-### 1. Define IAM Role and Permissions
-
-Use Terraform to create an IAM role allowing the Lambda function to:
-
-- Read from the upload bucket
-- Write to the error bucket
-- Delete invalid files from the source bucket
-
-### 2. Python Lambda Function (`lambda_function.py`)
-
-Key capabilities include:
-
-- Extracting event data from the S3 trigger
-- Parsing CSV files using the `csv` module
-- Validating fields: product line, currency, and date format
-- Copying invalid files to the error bucket and removing them from the upload bucket
+The [lambda_function.py](BillingBucketParser/lambda_function.py) implements a robust validation pipeline:
 
 ```python
-error_bucket = os.environ.get('BILLING_ERROR')
-obj = s3.Object(billing_bucket, csv_file)
-data = obj.get()['Body'].read().decode('utf-8').splitlines()
-for row in csv.reader(data[1:], delimiter=','):
-    if product_line not in valid_product_lines or currency not in valid_currencies:
-        # Copy to error bucket and delete
+def lambda_handler(event, context):
+    s3 = boto3.resource('s3')
+    billing_bucket = event['Records'][0]['s3']['bucket']['name']
+    csv_file = event['Records'][0]['s3']['object']['key']
+    error_bucket = os.environ.get('BILLING_ERROR')
+
+    # Validation logic for product lines, currencies, and date formats
+    valid_product_lines = ['Bakery', 'Meat', 'Dairy']
+    valid_currencies = ['USD', 'MXN', 'CAD']
 ```
 
-### 3. Terraform Configuration
+**Key Features:**
 
-Define the Lambda function and use environment variables for bucket names:
+- Environment variable-driven configuration for bucket references
+- Comprehensive validation against business rules
+- Error handling with file movement and cleanup
+- Structured logging for operational visibility
+
+### Terraform Infrastructure
+
+The infrastructure leverages modular Terraform configuration:
+
+- **[main.tf](terraform/main.tf)**: Provider configuration with version constraints
+- **[s3.tf](terraform/s3.tf)**: Bucket creation with random suffix generation
+- **[lambda.tf](terraform/lambda.tf)**: Function deployment with environment variables
+- **[iam.tf](terraform/iam.tf)**: Least privilege security policies
 
 ```hcl
 resource "aws_lambda_function" "csv_parser" {
-  function_name = "BillingBucketParser"
-  ...
+  function_name    = "BillingBucketParser"
+  runtime          = "python3.11"
+  timeout          = 30
+  memory_size      = 128
+
   environment {
     variables = {
       BILLING_UPLOAD = "${var.bucket_name_upload}-${random_id.s3_bucket_suffix.hex}"
@@ -125,18 +105,11 @@ resource "aws_lambda_function" "csv_parser" {
 }
 ```
 
-### 4. Configure S3 Trigger
+## Local Testing and Debugging
 
-Attach an event notification to the upload bucket (e.g. via Terraform or the AWS Console) to invoke the Lambda on `PUT` events.
+### Mock Event Testing
 
----
-
-## Local Testing
-
-### Run Locally
-
-1. Prepare a mock `event.json` file with your bucket name and CSV key.
-2. Load the Lambda manually:
+Local validation using [event.json](BillingBucketParser/event.json):
 
 ```python
 import json
@@ -149,100 +122,146 @@ response = lambda_handler(event, {})
 print(response)
 ```
 
-### Upload Files for Testing
+### Sample Data Validation
+
+Test files include intentional validation failures:
+
+- **Date Format Error**: `2023/05/11` in dairy CSV (should be `2023-05-11`)
+- **Invalid Product Line**: `Candy` in bakery CSV (should be `Bakery`)
+- **Invalid Currency**: `ABC` in bakery CSV (should be USD, CAD, or MXN)
+- **Negative Values**: `-2500.00` in bakery CSV for testing edge cases
+
+### CLI Testing Commands
 
 ```bash
-aws s3 cp s3_files/ s3://<upload-bucket-name>/ --recursive
+# Deploy infrastructure
+cd terraform
+terraform init && terraform apply
+
+# Upload test files (replace with actual bucket name)
+aws s3 cp ../s3_files/ s3://boto3-billing-x-[suffix]/ --recursive
+
+# Monitor Lambda logs
+aws logs tail /aws/lambda/BillingBucketParser --follow
 ```
 
-### Example Output
+## IAM Role and Permissions
 
-```bash
-['1', 'Lone Star Lactose', 'US', 'San Antonio', 'Dairy', 'Artisan Cheese', '2023-05-01', 'USD', '3500.00']
-...
-{'statusCode': 200, 'body': 'Success!'}
-```
-
----
-
-## Lambda Deployment with Environment Variables
+The implementation follows least privilege principles with granular S3 permissions:
 
 ```hcl
-resource "aws_lambda_function" "csv_parser" {
-  function_name    = "BillingBucketParser"
-  filename         = "../BillingBucketParser.zip"
-  handler          = "lambda_function.lambda_handler"
-  source_code_hash = filebase64sha256("../BillingBucketParser.zip")
-  runtime          = "python3.11"
-  role             = aws_iam_role.boto3_lambda_role.arn
-  timeout          = 30
-  memory_size      = 128
-
-  environment {
-    variables = {
-      BILLING_UPLOAD = "${var.bucket_name_upload}-${random_id.s3_bucket_suffix.hex}"
-      BILLING_ERROR  = "${var.bucket_name_error}-${random_id.s3_bucket_suffix.hex}"
-    }
-  }
-
-  tags = var.tags
-}
-```
-
----
-
-## IAM Role for Lambda S3 Access
-
-```hcl
-resource "aws_iam_role" "boto3_lambda_role" {
-  name = "lambda-s3-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
+resource "aws_iam_policy" "boto3_lambda_policy" {
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ],
+        Resource = "arn:aws:s3:::boto3-billing-x-da014e82"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject"
+        ],
+        Resource = "arn:aws:s3:::boto3-billing-errors-x-da014e82"
       }
-    }]
+    ]
   })
 }
-
-resource "aws_iam_policy_attachment" "lambda_policy_attach" {
-  name       = "lambda-s3-policy"
-  roles      = [aws_iam_role.boto3_lambda_role.name]
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-}
 ```
 
----
+**Security Features:**
+
+- Resource-specific ARN restrictions for S3 buckets
+- CloudWatch logging permissions for monitoring
+- Minimal required permissions for Lambda execution
 
 ## Design Decisions and Highlights
 
-The validation logic was intentionally encapsulated within the Lambda handler to maintain a single, traceable processing flow. Using environment variables for the bucket names avoided hardcoding and improved portability. Terraform was used to codify infrastructure with reusable and consistent logic, and S3 event triggers provided a serverless, event-driven mechanism to handle real-time uploads.
+### Architectural Choices
 
----
+**Event-Driven Processing**: S3 event notifications provide immediate processing without polling overhead, ensuring real-time validation and cost efficiency.
 
-## Errors Encountered
+**Environment Variable Configuration**: Bucket names are injected via Terraform-managed environment variables, enabling deployment flexibility and avoiding hardcoded dependencies.
 
-- **CORS Misconfiguration**: Avoided by not using API Gateway.
-- **Date Format Errors**: Caught using `datetime.strptime()` wrapped in `try/except`.
-- **Terraform Suffix Misalignment**: Resolved with consistent string interpolation and variable referencing.
+**Atomic Error Handling**: Invalid files are copied to error bucket before deletion, ensuring no data loss whilst maintaining clean primary storage.
 
----
+**Validation Strategy**: Early termination on first error reduces processing overhead whilst comprehensive logging provides debugging visibility.
+
+### Infrastructure Decisions
+
+**Random Bucket Suffixes**: Terraform random_id resource ensures globally unique bucket names across deployments whilst maintaining predictable naming patterns.
+
+**Minimal Lambda Configuration**: 128MB memory and 30-second timeout provide cost-effective resource allocation for CSV processing workloads.
+
+**CloudWatch Integration**: Structured logging with 14-day retention balances operational visibility with cost management.
+
+## Errors Encountered and Resolved
+
+### Date Format Validation
+
+**Issue**: CSV files contained mixed date formats (`YYYY-MM-DD` vs `YYYY/MM/DD`)
+**Resolution**: Implemented `datetime.strptime()` with try/except handling to catch `ValueError` exceptions and flag format violations.
+
+### IAM Permission Scope
+
+**Issue**: Initial implementation used overly broad S3 permissions
+**Resolution**: Refined IAM policy to resource-specific ARNs with action-level restrictions, implementing true least privilege access.
+
+### Lambda Error Handling
+
+**Issue**: Indentation error in try/except block caused syntax issues
+**Resolution**: Corrected indentation in the exception handling block for S3 copy operations, ensuring proper error catching and logging.
+
+### CSV Data Structure
+
+**Issue**: Mixed data formats in test files required robust validation
+**Resolution**: Implemented comprehensive validation for product lines, currencies, and date formats with early termination on first error found.
 
 ## Skills Demonstrated
 
-- **Boto3 for S3**: Uploading, copying, deleting, and reading file content.
-- **Lambda Authoring**: Efficient, clean Python scripting for file validation.
-- **Terraform Proficiency**: IAM, Lambda, and bucket provisioning using infrastructure as code.
-- **Debugging and Logging**: Clear print statements and exception handling for tracing validation logic.
+### AWS Services Implementation
 
----
+- **Lambda**: Serverless function development with Python 3.11 runtime
+- **S3**: Event-driven architecture with bucket policies and cross-bucket operations
+- **IAM**: Least privilege security model with resource-specific permissions
+- **CloudWatch**: Logging and monitoring integration for operational visibility
+
+### Infrastructure as Code
+
+- **Terraform**: Modular configuration with provider version constraints
+- **Resource Management**: Random ID generation and environment variable injection
+- **State Management**: Consistent resource naming and dependency management
+
+### Software Engineering Practices
+
+- **Error Handling**: Comprehensive exception management with graceful degradation
+- **Configuration Management**: Environment-driven deployment flexibility
+- **Testing Strategy**: Local validation with mock events and sample data
+- **Code Quality**: Clean, readable Python with proper separation of concerns
+
+### DevOps and Automation
+
+- **Event-Driven Architecture**: S3 trigger configuration for real-time processing
+- **Deployment Automation**: Terraform-managed infrastructure provisioning
+- **Monitoring Integration**: CloudWatch logging with retention policies
+- **Security Implementation**: Least privilege IAM with audit-ready permissions
 
 ## Conclusion
 
-This project demonstrates the end-to-end design and deployment of a production-grade serverless validation pipeline using AWS services. It showcases expertise in Python, Boto3, Lambda, Terraform, and event-driven design—resulting in a scalable, secure, and automation-friendly system suitable for real-world DevOps and data engineering workflows.
+This project demonstrates end-to-end implementation of a production-ready serverless data validation pipeline using modern AWS services and infrastructure as code practices. The solution showcases expertise in event-driven architecture, security-conscious design, and operational excellence through comprehensive monitoring and error handling. The modular Terraform configuration and environment-driven deployment strategy ensure maintainability and scalability for enterprise data processing requirements.
 
----
+The implementation reflects practical understanding of cloud-native development patterns, cost-effective resource utilisation, and security best practices essential for modern data engineering workflows.
